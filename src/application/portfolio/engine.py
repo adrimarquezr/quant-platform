@@ -10,7 +10,7 @@ Core Principles:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from src.domain.interfaces import IPortfolioEngine
 from src.domain.models import (
@@ -53,7 +53,7 @@ class PortfolioEngine(IPortfolioEngine):
             TargetWeights with constrained target allocation per asset.
         """
         active_constraints = constraints or self.default_constraints
-        now = timestamp or datetime.utcnow()
+        now = timestamp or datetime.now(UTC)
         current_weights = current_weights or {}
         volatilities = volatilities or {}
 

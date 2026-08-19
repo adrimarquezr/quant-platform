@@ -8,7 +8,7 @@ Organized into logical groups matching the domain bounded contexts.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -50,7 +50,9 @@ class AssetORM(Base):
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     market_data_metadata: Mapped[list[MarketDataMetadataORM]] = relationship(back_populates="asset")
@@ -72,7 +74,9 @@ class MarketDataMetadataORM(Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
     parquet_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     __table_args__ = (
         UniqueConstraint("asset_id", "provider", "frequency", name="uq_market_data_meta"),
@@ -96,7 +100,9 @@ class StrategyORM(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     category: Mapped[str] = mapped_column(String(50), nullable=False, default="momentum")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     versions: Mapped[list[StrategyVersionORM]] = relationship(back_populates="strategy")
@@ -115,7 +121,9 @@ class StrategyVersionORM(Base):
     code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     parameter_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     default_parameters: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     __table_args__ = (UniqueConstraint("strategy_id", "version", name="uq_strategy_version"),)
 
@@ -151,7 +159,9 @@ class BacktestConfigORM(Base):
     slippage_model: Mapped[str] = mapped_column(String(50), nullable=False, default="percentage")
     slippage_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0005)
     execution_mode: Mapped[str] = mapped_column(String(50), nullable=False, default="next_bar_open")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     strategy_version: Mapped[StrategyVersionORM] = relationship(back_populates="backtest_configs")
@@ -235,7 +245,9 @@ class OrderORM(Base):
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
     filled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -256,7 +268,9 @@ class ExecutionORM(Base):
     fill_quantity: Mapped[float] = mapped_column(Float, nullable=False)
     commission: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     slippage: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    executed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     order: Mapped[OrderORM] = relationship(back_populates="executions")
@@ -277,7 +291,9 @@ class PortfolioORM(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     cash: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     total_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     positions: Mapped[list[PositionORM]] = relationship(back_populates="portfolio")
@@ -301,7 +317,9 @@ class PositionORM(Base):
     current_price: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     market_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     unrealized_pnl: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     portfolio: Mapped[PortfolioORM] = relationship(back_populates="positions")
@@ -368,7 +386,9 @@ class RiskLimitORM(Base):
     max_volatility: Mapped[float] = mapped_column(Float, nullable=False, default=0.20)
     max_drawdown: Mapped[float] = mapped_column(Float, nullable=False, default=0.15)
     max_var_95: Mapped[float] = mapped_column(Float, nullable=False, default=0.05)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
 
 class RiskViolationORM(Base):
@@ -388,7 +408,9 @@ class RiskViolationORM(Base):
     actual_value: Mapped[float] = mapped_column(Float, nullable=False)
     limit_value: Mapped[float] = mapped_column(Float, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="ERROR")
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
 
 # ==============================================================================
@@ -406,7 +428,9 @@ class DataQualityRunORM(Base):
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PASSED")
     rows_checked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.now(UTC)
+    )
 
     # Relationships
     checks: Mapped[list[DataQualityCheckORM]] = relationship(

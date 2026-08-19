@@ -26,16 +26,16 @@ class TestMetricsCalculator:
 
     def test_total_return(self) -> None:
         """Total return = (final / initial) - 1."""
-        equity = [100_000, 101_000, 102_000, 110_000]
+        equity = [100_000.0, 101_000.0, 102_000.0, 110_000.0]
         returns = [0.0, 0.01, 0.0099, 0.0784]
-        metrics = self.calc.calculate_all(equity, returns, [], initial_cash=100_000)
+        metrics = self.calc.calculate_all(equity, returns, [], initial_cash=100_000.0)
         assert abs(metrics["total_return"] - 0.10) < 0.01
 
     def test_max_drawdown(self) -> None:
         """Max drawdown of [100, 110, 90, 95] should be ~-18.18%."""
         equity = [100.0, 110.0, 90.0, 95.0]
         dd = MetricsCalculator._max_drawdown(__import__("numpy").array(equity))
-        expected = (90 - 110) / 110  # -0.1818
+        expected = (90.0 - 110.0) / 110.0  # -0.1818
         assert abs(dd - expected) < 0.001
 
     def test_sharpe_ratio_zero_vol(self) -> None:
@@ -57,9 +57,40 @@ class TestMetricsCalculator:
         dates = [datetime(2023, 1, d) for d in range(2, 30)] + [
             datetime(2023, 2, d) for d in range(1, 25)
         ]
-        equity = list(range(100, 100 + len(dates)))
+        equity = [float(x) for x in range(100, 100 + len(dates))]
         result = MetricsCalculator.calculate_monthly_returns(equity, dates)
         assert "2023" in result
+
+    def test_trade_statistics_round_trip(self) -> None:
+        """Test FIFO trade matching for win rate, profit factor, and trade returns."""
+        import uuid
+
+        from src.domain.models import Execution, Order, OrderSide
+
+        o1 = Order(id=uuid.uuid4(), asset_symbol="SPY", side=OrderSide.BUY, quantity=10.0)
+        ex1 = Execution(order_id=o1.id, fill_price=100.0, fill_quantity=10.0, commission=1.0)
+
+        # Sell 10 at 110 (win: profit = 100 - 2 = 98)
+        o2 = Order(id=uuid.uuid4(), asset_symbol="SPY", side=OrderSide.SELL, quantity=10.0)
+        ex2 = Execution(order_id=o2.id, fill_price=110.0, fill_quantity=10.0, commission=1.0)
+
+        # Buy 10 at 100
+        o3 = Order(id=uuid.uuid4(), asset_symbol="SPY", side=OrderSide.BUY, quantity=10.0)
+        ex3 = Execution(order_id=o3.id, fill_price=100.0, fill_quantity=10.0, commission=1.0)
+
+        # Sell 10 at 95 (loss: profit = -50 - 2 = -52)
+        o4 = Order(id=uuid.uuid4(), asset_symbol="SPY", side=OrderSide.SELL, quantity=10.0)
+        ex4 = Execution(order_id=o4.id, fill_price=95.0, fill_quantity=10.0, commission=1.0)
+
+        orders = [o1, o2, o3, o4]
+        executions = [ex1, ex2, ex3, ex4]
+
+        stats = MetricsCalculator._trade_statistics(orders, executions)
+        assert stats["total_trades"] == 2.0
+        assert stats["win_rate"] == 0.5
+        assert stats["profit_factor"] > 1.0
+        assert stats["best_trade"] == 0.10
+        assert stats["worst_trade"] == -0.05
 
 
 @pytest.mark.unit

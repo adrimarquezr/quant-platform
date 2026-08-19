@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -47,7 +47,7 @@ class RiskService:
 
         if db is not None:
             try:
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
 
                 # Save point in time metric snapshot
                 metric_orm = RiskMetricORM(

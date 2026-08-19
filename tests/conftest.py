@@ -33,7 +33,7 @@ _TestSessionLocal = sessionmaker(bind=_test_engine, autocommit=False, autoflush=
 
 
 @pytest.fixture(autouse=True)
-def init_test_database():
+def init_test_database() -> Generator[None, None, None]:
     """Ensure clean schema for every test run."""
     Base.metadata.create_all(bind=_test_engine)
     yield
@@ -54,7 +54,7 @@ def db_session() -> Generator[Session, None, None]:
 def client() -> Generator[TestClient, None, None]:
     """Provide a FastAPI test client wired to the test database."""
 
-    def _get_test_db():
+    def _get_test_db() -> Generator[Session, None, None]:
         session = _TestSessionLocal()
         try:
             yield session

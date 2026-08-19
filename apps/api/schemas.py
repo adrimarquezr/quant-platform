@@ -8,7 +8,7 @@ They are separate from domain models and ORM models to maintain layer separation
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -21,8 +21,8 @@ class HealthResponse(BaseModel):
     """Health check response."""
 
     status: str = "healthy"
-    version: str = "0.1.0"
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    version: str = "1.0.0"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 # ==============================================================================
@@ -210,7 +210,7 @@ class DataQualityReportResponse(BaseModel):
     rows_checked: int = 0
     errors: list[str] = Field(default_factory=list)
     checks: list[DataQualityCheckResponse] = Field(default_factory=list)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DataQualityRunSummary(BaseModel):

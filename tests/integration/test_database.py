@@ -4,6 +4,8 @@ Integration tests for SQLAlchemy ORM models and Database Session.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -19,7 +21,7 @@ from src.infrastructure.database.models import (
 
 
 @pytest.fixture
-def in_memory_db() -> Session:
+def in_memory_db() -> Generator[Session, None, None]:
     """Create an in-memory SQLite database for testing ORM mapping."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
@@ -29,6 +31,8 @@ def in_memory_db() -> Session:
         yield session
     finally:
         session.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 @pytest.mark.integration

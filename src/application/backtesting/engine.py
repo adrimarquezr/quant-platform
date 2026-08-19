@@ -183,7 +183,9 @@ class BacktestEngine(IBacktestEngine):
 
         # --- Calculate Metrics ---
         elapsed_ms = int((time.perf_counter_ns() - start_time) / 1_000_000)
-        metrics = self._calculate_metrics(equity_curve, returns_list, all_orders, config)
+        metrics = self._calculate_metrics(
+            equity_curve, returns_list, all_orders, config, executions=all_executions
+        )
 
         return BacktestResult(
             config=config,
@@ -317,6 +319,7 @@ class BacktestEngine(IBacktestEngine):
         returns: list[float],
         orders: list[Order],
         config: BacktestConfig,
+        executions: list[Execution] | None = None,
     ) -> dict[str, float]:
         """Calculate comprehensive backtest metrics.
 
@@ -329,6 +332,7 @@ class BacktestEngine(IBacktestEngine):
             equity_curve=equity_curve,
             daily_returns=returns,
             orders=orders,
+            executions=executions,
             initial_cash=config.initial_cash,
             trading_days_per_year=252,
         )

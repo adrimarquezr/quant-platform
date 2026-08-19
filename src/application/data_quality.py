@@ -8,7 +8,7 @@ silently consume bad data. Every validation rule is documented with its rational
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -50,7 +50,7 @@ class DataQualityValidator(IDataQualityValidator):
     ) -> DataQualityReport:
         """Run all data quality checks and return a structured DataQualityReport."""
         checks: list[DataQualityCheckResult] = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         if df.is_empty():
             checks.append(
