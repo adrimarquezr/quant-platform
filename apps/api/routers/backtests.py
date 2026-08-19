@@ -11,6 +11,7 @@ import logging
 import uuid
 from pathlib import Path
 
+import polars as pl
 from fastapi import APIRouter, HTTPException
 
 from apps.api.schemas import (
@@ -66,7 +67,7 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
     strategy = strategy_cls()
 
     # 2. Load or fetch market data
-    data: dict[str, object] = {}
+    data: dict[str, pl.DataFrame] = {}
     for symbol in request.universe:
         try:
             if storage.exists(symbol):
@@ -111,7 +112,9 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
     # 5. Build response
     backtest_id = str(uuid.uuid4())
     metrics = (
-        BacktestMetricsResponse(**result.metrics) if result.metrics else BacktestMetricsResponse()
+        BacktestMetricsResponse.model_validate(result.metrics)
+        if result.metrics
+        else BacktestMetricsResponse()
     )
 
     response = BacktestResponse(

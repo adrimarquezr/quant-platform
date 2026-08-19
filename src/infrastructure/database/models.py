@@ -352,3 +352,81 @@ class RiskMetricORM(Base):
     max_drawdown: Mapped[float | None] = mapped_column(Float, nullable=True)
     concentration: Mapped[float | None] = mapped_column(Float, nullable=True)
     leverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class RiskLimitORM(Base):
+    """Configurable risk limit thresholds for portfolio governance."""
+
+    __tablename__ = "risk_limits"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    portfolio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portfolios.id"), nullable=True
+    )
+    max_position_weight: Mapped[float] = mapped_column(Float, nullable=False, default=0.25)
+    max_gross_exposure: Mapped[float] = mapped_column(Float, nullable=False, default=1.00)
+    max_volatility: Mapped[float] = mapped_column(Float, nullable=False, default=0.20)
+    max_drawdown: Mapped[float] = mapped_column(Float, nullable=False, default=0.15)
+    max_var_95: Mapped[float] = mapped_column(Float, nullable=False, default=0.05)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class RiskViolationORM(Base):
+    """Auditable log of risk limit violations for portfolios or backtests."""
+
+    __tablename__ = "risk_violations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    portfolio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portfolios.id"), nullable=True
+    )
+    backtest_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("backtests.id"), nullable=True
+    )
+    rule_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    actual_value: Mapped[float] = mapped_column(Float, nullable=False)
+    limit_value: Mapped[float] = mapped_column(Float, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="ERROR")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+# ==============================================================================
+# Data Quality Runs & Audit
+# ==============================================================================
+
+
+class DataQualityRunORM(Base):
+    """Record of a data quality validation execution on a dataset."""
+
+    __tablename__ = "data_quality_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset: Mapped[str] = mapped_column(String(100), nullable=False, default="daily_ohlcv")
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PASSED")
+    rows_checked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    checks: Mapped[list[DataQualityCheckORM]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class DataQualityCheckORM(Base):
+    """Result of an individual check within a data quality run."""
+
+    __tablename__ = "data_quality_checks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data_quality_runs.id"), nullable=False
+    )
+    check_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    details_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # Relationships
+    run: Mapped[DataQualityRunORM] = relationship(back_populates="checks")

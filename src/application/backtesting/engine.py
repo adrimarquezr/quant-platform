@@ -119,7 +119,7 @@ class BacktestEngine(IBacktestEngine):
                         # Buy to go long
                         quantity = target_notional / exec_price if exec_price > 0 else 0
                         if quantity > 0:
-                            order, execution, cost = self._execute_order(
+                            order, execution, _cost = self._execute_order(
                                 symbol, "buy", quantity, exec_price, config, current_date
                             )
                             cash -= (
@@ -134,7 +134,7 @@ class BacktestEngine(IBacktestEngine):
                         # Sell to go short (or close long)
                         if current_position > 0:
                             # Close existing long
-                            order, execution, cost = self._execute_order(
+                            order, execution, _cost = self._execute_order(
                                 symbol, "sell", current_position, exec_price, config, current_date
                             )
                             cash += (
@@ -148,7 +148,7 @@ class BacktestEngine(IBacktestEngine):
                         # Close position
                         side = "sell" if current_position > 0 else "buy"
                         qty = abs(current_position)
-                        order, execution, cost = self._execute_order(
+                        order, execution, _cost = self._execute_order(
                             symbol, side, qty, exec_price, config, current_date
                         )
                         if side == "sell":

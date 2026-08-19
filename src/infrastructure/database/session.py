@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.infrastructure.database.models import Base
@@ -18,7 +18,7 @@ DATABASE_URL = os.getenv(
 )
 
 
-def get_engine(url: str | None = None):
+def get_engine(url: str | None = None) -> Engine:
     """Create a SQLAlchemy engine."""
     return create_engine(
         url or DATABASE_URL,

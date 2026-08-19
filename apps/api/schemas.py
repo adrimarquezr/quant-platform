@@ -191,6 +191,42 @@ class BacktestSummary(BaseModel):
 # ==============================================================================
 
 
+class DataQualityCheckResponse(BaseModel):
+    """Result of an individual check."""
+
+    check_name: str
+    status: str
+    message: str
+    details: dict[str, float | int | str] = Field(default_factory=dict)
+
+
+class DataQualityReportResponse(BaseModel):
+    """Result of data quality validation."""
+
+    dataset: str = "daily_ohlcv"
+    symbol: str
+    status: str
+    is_valid: bool
+    rows_checked: int = 0
+    errors: list[str] = Field(default_factory=list)
+    checks: list[DataQualityCheckResponse] = Field(default_factory=list)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DataQualityRunSummary(BaseModel):
+    """Summary of a past data quality run."""
+
+    id: uuid.UUID
+    dataset: str
+    symbol: str
+    status: str
+    rows_checked: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# Keep for backwards compatibility
 class DataQualityReport(BaseModel):
     """Result of data quality validation."""
 
@@ -198,3 +234,119 @@ class DataQualityReport(BaseModel):
     is_valid: bool
     errors: list[str] = Field(default_factory=list)
     row_count: int = 0
+
+
+# ==============================================================================
+# Portfolios & Positions
+# ==============================================================================
+
+
+class PortfolioCreateRequest(BaseModel):
+    """Request to create a new portfolio."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = ""
+    initial_cash: float = Field(default=100_000.0, gt=0)
+
+
+class PositionResponse(BaseModel):
+    """Holding position in a portfolio."""
+
+    symbol: str
+    quantity: float
+    avg_entry_price: float
+    current_price: float
+    market_value: float
+    unrealized_pnl: float
+    weight: float = 0.0
+
+
+class PortfolioSummaryResponse(BaseModel):
+    """Summary representation of a portfolio."""
+
+    id: uuid.UUID
+    name: str
+    description: str
+    cash: float
+    total_value: float
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PortfolioSnapshotResponse(BaseModel):
+    """Historical snapshot of portfolio value."""
+
+    timestamp: datetime
+    total_value: float
+    cash: float
+    positions_value: float
+    daily_return: float | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PortfolioPerformanceResponse(BaseModel):
+    """Performance history of a portfolio."""
+
+    portfolio_id: uuid.UUID
+    total_value: float
+    cash: float
+    snapshots: list[PortfolioSnapshotResponse] = Field(default_factory=list)
+
+
+class RebalanceRequest(BaseModel):
+    """Request to rebalance a portfolio."""
+
+    method: str = "equal_weight"  # "equal_weight", "inverse_volatility", "volatility_targeting"
+    max_position_weight: float = 0.25
+    max_gross_exposure: float = 1.00
+    max_turnover: float = 0.50
+    target_volatility: float | None = None
+    universe: list[str] = Field(default=["SPY", "QQQ", "IWM", "TLT", "GLD"])
+
+
+# ==============================================================================
+# Risk Management
+# ==============================================================================
+
+
+class RiskViolationResponse(BaseModel):
+    """Detail of a risk limit violation."""
+
+    rule_name: str
+    description: str
+    actual_value: float
+    limit_value: float
+    severity: str = "ERROR"
+
+
+class RiskMetricResponse(BaseModel):
+    """Calculated point-in-time risk metrics."""
+
+    timestamp: datetime
+    var_95: float
+    cvar_95: float
+    volatility: float
+    max_drawdown: float
+    current_drawdown: float
+    gross_exposure: float
+    net_exposure: float
+    concentration_hhi: float
+    beta: float | None = None
+    verdict: str
+    violations: list[RiskViolationResponse] = Field(default_factory=list)
+
+
+class RiskEvaluateRequest(BaseModel):
+    """Request to evaluate risk profile for a sequence of returns or portfolio."""
+
+    equity_curve: list[float]
+    returns: list[float]
+    current_weights: dict[str, float]
+    benchmark_returns: list[float] | None = None
+    max_position_weight: float = 0.25
+    max_gross_exposure: float = 1.00
+    max_volatility: float = 0.20
+    max_drawdown: float = 0.15
+    max_var_95: float = 0.05

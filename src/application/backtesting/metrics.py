@@ -17,7 +17,7 @@ import math
 
 import numpy as np
 
-from src.domain.models import Order, OrderSide
+from src.domain.models import Order
 
 
 class MetricsCalculator:
@@ -162,11 +162,7 @@ class MetricsCalculator:
                 "worst_trade": 0.0,
             }
 
-        # Simplified: count buy/sell pairs as round-trip trades
         total_trades = len(orders)
-        # Without actual PnL per trade, we estimate from order flow
-        buy_orders = [o for o in orders if o.side == OrderSide.BUY]
-        sell_orders = [o for o in orders if o.side == OrderSide.SELL]
 
         # Basic statistics
         return {
@@ -216,7 +212,7 @@ class MetricsCalculator:
         prev_month_equity = equity_curve[0]
         prev_month = None
 
-        for i, (dt, eq) in enumerate(zip(dates, equity_curve)):
+        for i, (dt, _) in enumerate(zip(dates, equity_curve, strict=False)):
             year = str(dt.year)
             month = str(dt.month).zfill(2)
             current_key = f"{year}-{month}"

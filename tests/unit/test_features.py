@@ -8,6 +8,7 @@ import polars as pl
 import pytest
 
 from src.features.engine import (
+    FeatureEngine,
     add_momentum_features,
     add_risk_features,
     add_statistical_features,
@@ -150,3 +151,23 @@ class TestComputeAllFeatures:
         """Feature computation should not change the number of rows."""
         df = compute_all_features(sample_ohlcv_df)
         assert len(df) == len(sample_ohlcv_df)
+
+
+@pytest.mark.unit
+class TestFeatureEngineClass:
+    """Test the FeatureEngine object-oriented interface."""
+
+    def test_feature_engine_transform(self, sample_ohlcv_df: pl.DataFrame) -> None:
+        engine = FeatureEngine()
+        df = engine.transform(sample_ohlcv_df)
+        assert "return_252d" in df.columns
+        assert "volatility_60d" in df.columns
+        assert "sma_200" in df.columns
+        assert len(df) == len(sample_ohlcv_df)
+
+    def test_feature_engine_compute_symbol_features(self, sample_ohlcv_df: pl.DataFrame) -> None:
+        engine = FeatureEngine()
+        data = {"SPY": sample_ohlcv_df, "QQQ": sample_ohlcv_df}
+        features = engine.compute_symbol_features(data)
+        assert "SPY" in features and "QQQ" in features
+        assert "z_score_20d" in features["SPY"].columns
