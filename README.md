@@ -17,16 +17,17 @@ The platform is designed following **Hexagonal / Clean Architecture** principles
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                   APACHE SUPERSET / BI DASHBOARDS                       │
-│    Equity Curves  •  Risk Metrics & VaR  •  Asset Weights  •  Violations │
+│                   PRESENTATION & UNIFIED INTERFACES                      │
+│   • React Web UI (SPA): Dashboard, Backtester, Data Explorer, Portfolios │
+│   • Apache Superset BI: Equity Curves, Risk & VaR, Asset Weights, SQL    │
+│   • Unified CLI: quant-platform backtest / risk / data-quality / rebal   │
 └────────────────────────────────────┬─────────────────────────────────────┘
-                                     │ (SQL Analytics)
+                                     │ (REST API & Analytics)
                                      ▼
-┌────────────────────────────────────┬─────────────────────────────────────┐
-│          FASTAPI REST API          │       UNIFIED CLI TOOL              │
-│  /portfolios  /risk  /data-quality │   quant-platform backtest           │
-│  /strategies  /backtests           │   quant-platform data-quality       │
-└────────────────────────────────────┴─────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                             FASTAPI REST API                             │
+│   /backtests  •  /strategies  •  /market-data  •  /portfolios  •  /risk  │
+└────────────────────────────────────┬─────────────────────────────────────┘
                                      │ (Service Layer)
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -179,23 +180,43 @@ python -m apps.cli.main rebalance --symbols SPY QQQ AAPL MSFT --method equal_wei
 python -m apps.cli.main risk --max-vol 0.25 --max-dd 0.20 --max-var 0.05
 ```
 
-### 3. Launching Full Infrastructure with Docker Compose
+### 4. Running the Web Frontend (React + Vite SPA)
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Start development server (with HMR and backend proxy)
+npm run dev
+
+# Run frontend test suite (Vitest + Testing Library)
+npm run test
+
+# Type-check and production build
+npm run build
+```
+
+### 5. Launching Full Infrastructure with Docker Compose
 
 ```bash
 # Copy environment configuration
 cp .env.example .env
 
-# Start all platform microservices (Postgres, Redis, Backend API, Airflow, Superset)
+# Start all platform microservices (Frontend, Backend API, Postgres, Redis, Airflow, Superset)
 docker compose up -d
 
 # Verify running containers
 docker compose ps
 ```
 
-### 4. Service Endpoints & Access
+### 6. Service Endpoints & Access
 
 | Service | URL | Default Credentials | Purpose |
 | :--- | :--- | :--- | :--- |
+| **Quant Platform Web UI** | `http://localhost:3000` | None | Unified React frontend (Dashboard, Backtests, Portfolios, Explorer) |
 | **FastAPI REST Docs** | `http://localhost:8000/docs` | None | Interactive Swagger API documentation |
 | **Apache Airflow UI** | `http://localhost:8080` | `airflow` / `airflow` | DAG pipeline monitoring & scheduling |
 | **Apache Superset BI** | `http://localhost:8088` | `admin` / `admin` | Portfolio & Risk analytical dashboards |
