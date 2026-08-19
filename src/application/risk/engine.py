@@ -10,7 +10,7 @@ Key Principles:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -44,7 +44,7 @@ class RiskEngine(IRiskEngine):
     ) -> RiskProfile:
         """Evaluate full risk profile of a portfolio or backtest and check limits."""
         active_limits = limits or self.default_limits
-        now = timestamp or datetime.utcnow()
+        now = timestamp or datetime.now(UTC)
 
         # 1. Historical VaR and CVaR
         var_95 = self.calculate_var(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -140,11 +140,11 @@ class Bar:
 
 @dataclass(frozen=True)
 class Signal:
-    """Output of a strategy for a given asset at a given point in time."""
+    """A trading signal emitted by a strategy for a specific asset."""
 
     symbol: str
-    timestamp: datetime
     direction: SignalDirection
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     strength: float = 1.0  # Normalized signal strength [-1, 1]
     metadata: dict[str, float] = field(default_factory=dict)
 
@@ -185,7 +185,7 @@ class Order:
     quantity: float = 0.0
     limit_price: float | None = None
     status: OrderStatus = OrderStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     filled_at: datetime | None = None
 
 
@@ -199,7 +199,7 @@ class Execution:
     fill_quantity: float = 0.0
     commission: float = 0.0
     slippage: float = 0.0
-    executed_at: datetime = field(default_factory=datetime.utcnow)
+    executed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
@@ -311,7 +311,7 @@ class DataQualityReport:
     status: QualityCheckStatus
     rows_checked: int
     checks: list[DataQualityCheckResult] = field(default_factory=list)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def is_valid(self) -> bool:

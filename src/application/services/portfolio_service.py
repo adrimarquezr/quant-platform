@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -41,13 +41,14 @@ class PortfolioService:
         initial_cash: float = 100_000.0,
     ) -> PortfolioORM:
         """Create and persist a new portfolio."""
+        now = datetime.now(UTC)
         portfolio = PortfolioORM(
             id=uuid.uuid4(),
             name=name,
             description=description,
             cash=initial_cash,
             total_value=initial_cash,
-            updated_at=datetime.utcnow(),
+            updated_at=now,
         )
         db.add(portfolio)
         db.commit()
@@ -57,7 +58,7 @@ class PortfolioService:
         snapshot = PortfolioSnapshotORM(
             id=uuid.uuid4(),
             portfolio_id=portfolio.id,
-            timestamp=datetime.utcnow(),
+            timestamp=now,
             total_value=initial_cash,
             cash=initial_cash,
             positions_value=0.0,
@@ -130,7 +131,7 @@ class PortfolioService:
 
         # Update positions in database
         positions_val = 0.0
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for sym, target_w in target_weights.weights.items():
             px = prices.get(sym, 100.0)

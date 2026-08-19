@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import polars as pl
 from sqlalchemy.orm import Session
@@ -42,7 +42,7 @@ class DataQualityService:
                     symbol=report.symbol,
                     status=report.status.value,
                     rows_checked=report.rows_checked,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(UTC),
                 )
                 db.add(run_orm)
                 db.flush()
