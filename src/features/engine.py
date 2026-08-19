@@ -255,3 +255,33 @@ def compute_all_features(
     df = add_statistical_features(df)
     df = add_risk_features(df)
     return df
+
+
+class FeatureEngine:
+    """Object-oriented interface for feature calculation with configurable presets."""
+
+    def __init__(
+        self,
+        momentum_periods: list[int] | None = None,
+        volatility_windows: list[int] | None = None,
+        sma_periods: list[int] | None = None,
+        ema_periods: list[int] | None = None,
+    ) -> None:
+        self.momentum_periods = momentum_periods or [1, 5, 20, 60, 120, 252]
+        self.volatility_windows = volatility_windows or [20, 60]
+        self.sma_periods = sma_periods or [20, 50, 200]
+        self.ema_periods = ema_periods or [12, 26]
+
+    def transform(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Compute all configured quantitative features on an OHLCV DataFrame."""
+        return compute_all_features(
+            df=df,
+            momentum_periods=self.momentum_periods,
+            volatility_windows=self.volatility_windows,
+            sma_periods=self.sma_periods,
+            ema_periods=self.ema_periods,
+        )
+
+    def compute_symbol_features(self, data: dict[str, pl.DataFrame]) -> dict[str, pl.DataFrame]:
+        """Compute features across multiple symbol DataFrames."""
+        return {symbol: self.transform(df) for symbol, df in data.items()}

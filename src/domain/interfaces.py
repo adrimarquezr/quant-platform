@@ -8,14 +8,21 @@ Concrete implementations live in src/infrastructure/.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import date, datetime
 
 import polars as pl
 
 from src.domain.models import (
     BacktestConfig,
     BacktestResult,
+    DataQualityReport,
+    DrawdownDetails,
+    PortfolioConstraints,
+    PortfolioConstructionMethod,
+    RiskLimitConfig,
+    RiskProfile,
     Signal,
+    TargetWeights,
 )
 
 
@@ -141,3 +148,71 @@ class IDataQualityValidator(ABC):
         Returns:
             List of error messages. Empty list means data is valid.
         """
+
+    @abstractmethod
+    def validate_dataset(
+        self,
+        df: pl.DataFrame,
+        symbol: str,
+        dataset_name: str = "daily_ohlcv",
+    ) -> DataQualityReport:
+        """Perform formal validation and produce a structured DataQualityReport."""
+
+
+class IPortfolioEngine(ABC):
+    """Contract for Portfolio Construction and Constraint Management."""
+
+    @abstractmethod
+    def construct_weights(
+        self,
+        signals: list[Signal],
+        current_weights: dict[str, float] | None = None,
+        volatilities: dict[str, float] | None = None,
+        method: PortfolioConstructionMethod = PortfolioConstructionMethod.EQUAL_WEIGHT,
+        constraints: PortfolioConstraints | None = None,
+        timestamp: datetime | None = None,
+    ) -> TargetWeights:
+        """Compute constrained target weights from signals and market metrics."""
+
+
+class IRiskEngine(ABC):
+    """Contract for Portfolio Risk Evaluation and Limit Governance."""
+
+    @abstractmethod
+    def evaluate_risk(
+        self,
+        equity_curve: list[float],
+        returns: list[float],
+        current_weights: dict[str, float],
+        asset_returns: dict[str, list[float]] | None = None,
+        benchmark_returns: list[float] | None = None,
+        limits: RiskLimitConfig | None = None,
+        timestamp: datetime | None = None,
+    ) -> RiskProfile:
+        """Evaluate portfolio risk profile and verify risk limits."""
+
+    @abstractmethod
+    def calculate_var(
+        self,
+        returns: list[float],
+        confidence_level: float = 0.95,
+        lookback_days: int = 252,
+    ) -> float:
+        """Calculate Historical Value at Risk (VaR)."""
+
+    @abstractmethod
+    def calculate_cvar(
+        self,
+        returns: list[float],
+        confidence_level: float = 0.95,
+        lookback_days: int = 252,
+    ) -> float:
+        """Calculate Conditional Value at Risk (CVaR / Expected Shortfall)."""
+
+    @abstractmethod
+    def calculate_drawdown_details(
+        self,
+        equity_curve: list[float],
+        dates: list[datetime] | None = None,
+    ) -> DrawdownDetails:
+        """Calculate detailed drawdown metrics (peak, trough, recovery, current)."""

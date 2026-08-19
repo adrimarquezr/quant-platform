@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from src.domain.interfaces import IExecutionSimulator
 
 logger = logging.getLogger(__name__)
 
 
-class SlippageModel(str, Enum):
+class SlippageModel(StrEnum):
     """Available slippage models."""
 
     FIXED_BPS = "fixed_bps"  # Fixed basis points

@@ -2,11 +2,13 @@
 # Docker Compose — Quant Platform Development Environment
 # =============================================================================
 # Services:
-#   - backend:    FastAPI REST API (Python 3.12)
-#   - postgres:   PostgreSQL 16 (transactional data + Superset metadata)
-#   - superset:   Apache Superset (Quant BI dashboards)
-#   - prometheus: Prometheus (metrics collection) — Phase 4
-#   - grafana:    Grafana (operational monitoring) — Phase 4
+#   - backend:           FastAPI REST API (Python 3.12)
+#   - postgres:          PostgreSQL 16 (metadata store & Airflow DB)
+#   - redis:             Redis (Airflow Celery message broker)
+#   - airflow-webserver: Apache Airflow Web UI & REST API
+#   - airflow-scheduler: Apache Airflow Task Scheduler
+#   - airflow-worker:    Apache Airflow Celery Task Worker
+#   - superset:          Apache Superset (Quant BI dashboards)
 # =============================================================================
 
 services:
@@ -35,6 +37,23 @@ services:
       - quant-network
 
   # --------------------------------------------------------------------------
+  # Redis — In-memory broker for Airflow Celery Executor
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: quant-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
   # Backend — FastAPI REST API
   # --------------------------------------------------------------------------
   backend:
@@ -56,6 +75,7 @@ services:
       - ./apps:/app/apps
       - ./data:/app/data
       - ./configs:/app/configs
+      - ./dags:/app/dags
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,6 +85,96 @@ services:
       timeout: 10s
       start_period: 15s
       retries: 3
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
+  # Airflow Webserver — UI & API Orchestration
+  # --------------------------------------------------------------------------
+  airflow-webserver:
+    image: apache/airflow:2.10.2-python3.12
+    container_name: quant-airflow-webserver
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-quant_airflow_secret_key_change_me}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      PYTHONPATH: /opt/airflow
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./configs:/opt/airflow/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: webserver
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
+  # Airflow Scheduler — Dag Parsing & Job Dispatch
+  # --------------------------------------------------------------------------
+  airflow-scheduler:
+    image: apache/airflow:2.10.2-python3.12
+    container_name: quant-airflow-scheduler
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      PYTHONPATH: /opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./configs:/opt/airflow/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: scheduler
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
+  # Airflow Worker — Celery Task Runner
+  # --------------------------------------------------------------------------
+  airflow-worker:
+    image: apache/airflow:2.10.2-python3.12
+    container_name: quant-airflow-worker
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      PYTHONPATH: /opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./data:/opt/airflow/data
+      - ./configs:/opt/airflow/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery worker
     networks:
       - quant-network
 

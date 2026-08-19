@@ -10,14 +10,15 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
+from typing import Any
 
 # ==============================================================================
 # Enumerations
 # ==============================================================================
 
 
-class AssetClass(str, Enum):
+class AssetClass(StrEnum):
     """Supported asset classes."""
 
     EQUITY = "equity"
@@ -28,21 +29,21 @@ class AssetClass(str, Enum):
     FX = "fx"
 
 
-class OrderSide(str, Enum):
+class OrderSide(StrEnum):
     """Order direction."""
 
     BUY = "buy"
     SELL = "sell"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     """Order type for execution."""
 
     MARKET = "market"
     LIMIT = "limit"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """Lifecycle status of an order."""
 
     PENDING = "pending"
@@ -53,7 +54,7 @@ class OrderStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class BacktestStatus(str, Enum):
+class BacktestStatus(StrEnum):
     """Lifecycle status of a backtest run."""
 
     PENDING = "pending"
@@ -62,12 +63,35 @@ class BacktestStatus(str, Enum):
     FAILED = "failed"
 
 
-class SignalDirection(str, Enum):
+class SignalDirection(StrEnum):
     """Signal output from a strategy."""
 
     LONG = "long"
     SHORT = "short"
     FLAT = "flat"
+
+
+class QualityCheckStatus(StrEnum):
+    """Status of a data quality check."""
+
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    WARNING = "WARNING"
+
+
+class PortfolioConstructionMethod(StrEnum):
+    """Supported portfolio weighting methods."""
+
+    EQUAL_WEIGHT = "equal_weight"
+    INVERSE_VOLATILITY = "inverse_volatility"
+    VOLATILITY_TARGETING = "volatility_targeting"
+
+
+class RiskVerdict(StrEnum):
+    """Risk engine approval verdict for a portfolio."""
+
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 
 # ==============================================================================
@@ -261,3 +285,147 @@ class BacktestResult:
     executions: list[Execution]
     metrics: dict[str, float]
     execution_time_ms: int = 0
+
+
+# ==============================================================================
+# Data Quality Models
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class DataQualityCheckResult:
+    """Result of an individual data quality check."""
+
+    check_name: str
+    status: QualityCheckStatus
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DataQualityReport:
+    """Aggregate data quality validation report for a dataset/symbol."""
+
+    dataset: str
+    symbol: str
+    status: QualityCheckStatus
+    rows_checked: int
+    checks: list[DataQualityCheckResult] = field(default_factory=list)
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+
+    @property
+    def is_valid(self) -> bool:
+        return self.status == QualityCheckStatus.PASSED
+
+    @property
+    def errors(self) -> list[str]:
+        return [c.message for c in self.checks if c.status == QualityCheckStatus.FAILED]
+
+    @property
+    def check_summary(self) -> dict[str, str]:
+        return {c.check_name: c.status.value for c in self.checks}
+
+
+# ==============================================================================
+# Portfolio Engine Models
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class PortfolioConstraints:
+    """Configurable limits for portfolio construction."""
+
+    max_position_weight: float = 0.25  # Max absolute weight per asset (e.g. 25%)
+    max_gross_exposure: float = 1.00  # Max sum of absolute weights (e.g. 100%)
+    max_turnover: float = 0.50  # Max rebalance turnover per step
+    target_volatility: float | None = None  # Optional annual volatility target
+
+    def __post_init__(self) -> None:
+        if self.max_position_weight <= 0 or self.max_position_weight > 1.0:
+            msg = f"max_position_weight must be in (0, 1], got {self.max_position_weight}"
+            raise ValueError(msg)
+        if self.max_gross_exposure <= 0:
+            msg = f"max_gross_exposure must be positive, got {self.max_gross_exposure}"
+            raise ValueError(msg)
+        if self.max_turnover <= 0:
+            msg = f"max_turnover must be positive, got {self.max_turnover}"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class TargetWeights:
+    """Target portfolio weights output by PortfolioEngine."""
+
+    weights: dict[str, float]  # symbol -> target weight [-1.0, 1.0]
+    timestamp: datetime
+    method: PortfolioConstructionMethod
+    turnover: float = 0.0
+    metadata: dict[str, float | str] = field(default_factory=dict)
+
+    @property
+    def gross_exposure(self) -> float:
+        return sum(abs(w) for w in self.weights.values())
+
+    @property
+    def net_exposure(self) -> float:
+        return sum(self.weights.values())
+
+
+# ==============================================================================
+# Risk Engine Models
+# ==============================================================================
+
+
+@dataclass(frozen=True)
+class RiskViolation:
+    """Record of a risk limit violation."""
+
+    rule_name: str
+    description: str
+    actual_value: float
+    limit_value: float
+    severity: str = "ERROR"  # "ERROR" or "WARNING"
+
+
+@dataclass(frozen=True)
+class RiskLimitConfig:
+    """Configurable limits for the RiskEngine."""
+
+    max_position_weight: float = 0.25
+    max_gross_exposure: float = 1.00
+    max_volatility: float = 0.20  # Annualized volatility ceiling
+    max_drawdown: float = 0.15  # 15% max drawdown ceiling
+    max_var_95: float = 0.05  # 5% daily VaR limit
+    confidence_level: float = 0.95
+    lookback_days: int = 252
+
+
+@dataclass(frozen=True)
+class DrawdownDetails:
+    """Detailed drawdown tracking."""
+
+    current_drawdown: float
+    max_drawdown: float
+    peak_equity: float
+    trough_equity: float
+    peak_date: datetime | None = None
+    trough_date: datetime | None = None
+    is_recovered: bool = False
+
+
+@dataclass(frozen=True)
+class RiskProfile:
+    """Point-in-time risk evaluation of a portfolio or backtest."""
+
+    timestamp: datetime
+    var_95: float  # Historical VaR at configured confidence
+    cvar_95: float  # Conditional VaR / Expected Shortfall
+    volatility: float  # Annualized rolling volatility
+    drawdown_details: DrawdownDetails
+    gross_exposure: float
+    net_exposure: float
+    concentration_hhi: float  # Herfindahl-Hirschman Index
+    beta: float | None = None
+    correlations: dict[str, dict[str, float]] = field(default_factory=dict)
+    verdict: RiskVerdict = RiskVerdict.APPROVED
+    violations: list[RiskViolation] = field(default_factory=list)

@@ -7,12 +7,21 @@ Assembles all routers, configures middleware, and manages application lifecycle.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.api.routers import backtests, health, market_data
+from apps.api.routers import (
+    backtests,
+    data_quality,
+    health,
+    market_data,
+    portfolios,
+    risk,
+    strategies,
+)
 
 # Configure structured logging
 logging.basicConfig(
@@ -24,10 +33,9 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # noqa: ARG001
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
     """Application lifecycle — startup and shutdown hooks."""
     logger.info("🚀 Quant Platform API starting up...")
-    # Future: init DB, warm caches, verify connections
     yield
     logger.info("🛑 Quant Platform API shutting down...")
 
@@ -39,7 +47,7 @@ app = FastAPI(
         "Market data ingestion, strategy backtesting, portfolio construction, "
         "and risk management via a clean REST API."
     ),
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -58,9 +66,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(market_data.router)
 app.include_router(backtests.router)
-
-# Future routers (Phase 2+):
-# app.include_router(strategies.router)
-# app.include_router(portfolios.router)
-# app.include_router(risk.router)
-# app.include_router(airflow_trigger.router)
+app.include_router(portfolios.router)
+app.include_router(risk.router)
+app.include_router(data_quality.router)
+app.include_router(strategies.router)

@@ -5,14 +5,65 @@ Shared test fixtures for the Quant Platform test suite.
 from __future__ import annotations
 
 import sys
+from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
 
 import polars as pl
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Ensure src and apps are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from apps.api.main import app
+from src.infrastructure.database.models import Base
+from src.infrastructure.database.session import get_db
+
+# Shared in-memory SQLite engine for all integration & E2E tests
+_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+_TestSessionLocal = sessionmaker(bind=_test_engine, autocommit=False, autoflush=False)
+
+
+@pytest.fixture(autouse=True)
+def init_test_database():
+    """Ensure clean schema for every test run."""
+    Base.metadata.create_all(bind=_test_engine)
+    yield
+    Base.metadata.drop_all(bind=_test_engine)
+
+
+@pytest.fixture
+def db_session() -> Generator[Session, None, None]:
+    """Provide a database session for testing."""
+    session = _TestSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def client() -> Generator[TestClient, None, None]:
+    """Provide a FastAPI test client wired to the test database."""
+
+    def _get_test_db():
+        session = _TestSessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _get_test_db
+    yield TestClient(app)
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture

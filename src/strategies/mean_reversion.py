@@ -7,13 +7,14 @@ bet on reversion.
 
     Long when z-score < -entry_threshold  (price is "too low")
     Short when z-score > +entry_threshold (price is "too high")
-    Flat when z-score crosses back inside exit_threshold
+    Flat when abs(z-score) < exit_threshold (price reverted close to mean)
 
 Reference: Avellaneda & Lee (2010), "Statistical Arbitrage in the US Equities Market"
 """
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 import polars as pl
@@ -23,7 +24,7 @@ from src.domain.models import Signal, SignalDirection
 
 
 class MeanReversionStrategy(IStrategy):
-    """Z-score based mean reversion strategy."""
+    """Z-score based mean reversion strategy with robust edge case handling."""
 
     @property
     def name(self) -> str:
@@ -45,24 +46,27 @@ class MeanReversionStrategy(IStrategy):
             entry_threshold: Z-score threshold to enter a position (default: 2.0).
             exit_threshold: Z-score threshold to exit a position (default: 0.5).
         """
-        lookback = int(parameters.get("lookback_period", 20))
+        lookback = max(2, int(parameters.get("lookback_period", 20)))
         entry_threshold = float(parameters.get("entry_threshold", 2.0))
         exit_threshold = float(parameters.get("exit_threshold", 0.5))
 
         signals: list[Signal] = []
 
         for symbol, df in data.items():
-            if len(df) < lookback + 1:
+            if df.is_empty() or len(df) < lookback:
                 continue
 
-            # Compute z-score using backward-looking window
+            # Compute rolling mean and std
+            rolling_mean_col = pl.col("close").rolling_mean(lookback)
+            rolling_std_col = pl.col("close").rolling_std(lookback)
+
             z_col = f"z_score_{lookback}d"
             if z_col not in df.columns:
                 df = df.with_columns(
-                    (
-                        (pl.col("close") - pl.col("close").rolling_mean(lookback))
-                        / pl.col("close").rolling_std(lookback)
-                    ).alias(z_col)
+                    pl.when(rolling_std_col > 1e-8)
+                    .then((pl.col("close") - rolling_mean_col) / rolling_std_col)
+                    .otherwise(0.0)
+                    .alias(z_col)
                 )
 
             # Get the most recent z-score
@@ -70,8 +74,8 @@ class MeanReversionStrategy(IStrategy):
             z_value = last_row[z_col].item()
             timestamp = last_row["timestamp"].item()
 
-            if z_value is None:
-                continue
+            if z_value is None or math.isnan(z_value) or math.isinf(z_value):
+                z_value = 0.0
 
             if not isinstance(timestamp, datetime):
                 timestamp = datetime(timestamp.year, timestamp.month, timestamp.day)
@@ -90,7 +94,7 @@ class MeanReversionStrategy(IStrategy):
                 direction = SignalDirection.FLAT
                 strength = 0.0
             else:
-                # Between exit and entry thresholds — hold current direction
+                # Between exit and entry thresholds — hold / flat
                 direction = SignalDirection.FLAT
                 strength = 0.0
 
@@ -104,6 +108,7 @@ class MeanReversionStrategy(IStrategy):
                         "z_score": float(z_value),
                         "lookback": float(lookback),
                         "entry_threshold": entry_threshold,
+                        "exit_threshold": exit_threshold,
                     },
                 )
             )

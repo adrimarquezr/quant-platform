@@ -7,14 +7,17 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]" || pip install --no-cache-dir .
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
 
-# Copy source code
+# Copy configuration and source files required by hatchling build backend
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY apps/ ./apps/
 COPY configs/ ./configs/
+
+# Install Python dependencies and package in editable mode
+RUN pip install --no-cache-dir -e ".[dev]"
 
 # Create data directories
 RUN mkdir -p /app/data/raw /app/data/processed /app/data/features
