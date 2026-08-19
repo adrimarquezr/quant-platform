@@ -78,6 +78,10 @@ async def get_prices(
     """Retrieve price data from the Parquet data lake."""
     try:
         df = storage.load_ohlcv(symbol)
+        if "timestamp" in df.columns:
+            df = df.with_columns(
+                pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+            )
 
         # Apply date filters
         if start_date:
