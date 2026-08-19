@@ -22,6 +22,7 @@ from apps.api.routers import (
     risk,
     strategies,
 )
+from src.infrastructure.database.session import init_db
 
 # Configure structured logging
 logging.basicConfig(
@@ -36,6 +37,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
     """Application lifecycle — startup and shutdown hooks."""
     logger.info("🚀 Quant Platform API starting up...")
+    try:
+        init_db()
+        logger.info("✅ Database tables initialized successfully.")
+    except Exception as exc:
+        logger.warning("⚠️ Database initialization skipped or failed: %s", exc)
     yield
     logger.info("🛑 Quant Platform API shutting down...")
 
