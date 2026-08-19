@@ -1,0 +1,111 @@
+# =============================================================================
+# Docker Compose — Quant Platform Development Environment
+# =============================================================================
+# Services:
+#   - backend:    FastAPI REST API (Python 3.12)
+#   - postgres:   PostgreSQL 16 (transactional data + Superset metadata)
+#   - superset:   Apache Superset (Quant BI dashboards)
+#   - prometheus: Prometheus (metrics collection) — Phase 4
+#   - grafana:    Grafana (operational monitoring) — Phase 4
+# =============================================================================
+
+services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL — Transactional & Metadata Store
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: quant-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quant_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-quant_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quant_user} -d ${POSTGRES_DB:-quant_platform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
+  # Backend — FastAPI REST API
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+    container_name: quant-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_ENV: development
+      DATA_DIR: /app/data
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./apps:/app/apps
+      - ./data:/app/data
+      - ./configs:/app/configs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
+  # Apache Superset — Quant BI Dashboards
+  # --------------------------------------------------------------------------
+  superset:
+    image: apache/superset:latest
+    container_name: quant-superset
+    restart: unless-stopped
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change_me_superset_secret}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USER:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_ADMIN_EMAIL: admin@quant-platform.local
+      SUPERSET_ADMIN_FIRST_NAME: Admin
+      SUPERSET_ADMIN_LAST_NAME: User
+      DATABASE_URL: postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+    ports:
+      - "${SUPERSET_PORT:-8088}:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - superset_home:/app/superset_home
+    networks:
+      - quant-network
+
+# --------------------------------------------------------------------------
+# Networks
+# --------------------------------------------------------------------------
+networks:
+  quant-network:
+    driver: bridge
+    name: quant-network
+
+# --------------------------------------------------------------------------
+# Volumes
+# --------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  superset_home:
+    driver: local

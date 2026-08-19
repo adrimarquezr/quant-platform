@@ -1,0 +1,146 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quant-platform"
+version = "0.1.0"
+description = "Quantitative Research & Systematic Trading Platform"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Quant Platform Team" }]
+
+dependencies = [
+    # Web Framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    # Database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "psycopg2-binary>=2.9.10",
+    "alembic>=1.14.0",
+    # Data Processing
+    "polars>=1.14.0",
+    "pyarrow>=18.0.0",
+    "duckdb>=1.1.0",
+    "numpy>=2.1.0",
+    "scipy>=1.14.0",
+    # Market Data
+    "yfinance>=0.2.48",
+    # Utilities
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.1",
+    "structlog>=24.4.0",
+    "prometheus-client>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.0",
+    "detect-secrets>=1.5.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "apps"]
+
+# ==============================================================================
+# Ruff (Linter + Formatter — replaces Black, isort, flake8, pyflakes, etc.)
+# ==============================================================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "apps", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "RUF", # ruff-specific rules
+    "C4",  # flake8-comprehensions
+    "PT",  # flake8-pytest-style
+    "RET", # flake8-return
+    "ARG", # flake8-unused-arguments
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "RET504", # unnecessary assignment before return
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "apps"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ==============================================================================
+# Mypy
+# ==============================================================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ==============================================================================
+# Pytest
+# ==============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=src",
+    "--cov=apps",
+    "--cov-report=term-missing",
+    "--cov-report=html:reports/coverage",
+]
+markers = [
+    "unit: Unit tests (fast, no external deps)",
+    "integration: Integration tests (require database/services)",
+    "e2e: End-to-end tests (full pipeline)",
+    "slow: Slow tests",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src", "apps"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "@abstractmethod",
+    "raise NotImplementedError",
+]

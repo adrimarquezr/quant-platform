@@ -1,0 +1,2 @@
+# This directory is the Parquet data lake root.
+# It is gitignored — raw market data should not be committed.

@@ -1,0 +1,66 @@
+"""
+FastAPI Application — Entrypoint for the Quant Platform REST API.
+
+Assembles all routers, configures middleware, and manages application lifecycle.
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from apps.api.routers import backtests, health, market_data
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: ARG001
+    """Application lifecycle — startup and shutdown hooks."""
+    logger.info("🚀 Quant Platform API starting up...")
+    # Future: init DB, warm caches, verify connections
+    yield
+    logger.info("🛑 Quant Platform API shutting down...")
+
+
+app = FastAPI(
+    title="Quant Platform API",
+    description=(
+        "Quantitative Research & Systematic Trading Platform — "
+        "Market data ingestion, strategy backtesting, portfolio construction, "
+        "and risk management via a clean REST API."
+    ),
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# CORS — allow Superset and local dev tools
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register routers
+app.include_router(health.router)
+app.include_router(market_data.router)
+app.include_router(backtests.router)
+
+# Future routers (Phase 2+):
+# app.include_router(strategies.router)
+# app.include_router(portfolios.router)
+# app.include_router(risk.router)
+# app.include_router(airflow_trigger.router)
