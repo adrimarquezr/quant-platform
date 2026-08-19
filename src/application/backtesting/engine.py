@@ -71,6 +71,16 @@ class BacktestEngine(IBacktestEngine):
         start_time = time.perf_counter_ns()
 
         # --- Preparation ---
+        # Normalize all data frames to have timezone-naive timestamps
+        normalized_data: dict[str, pl.DataFrame] = {}
+        for symbol, df in data.items():
+            if "timestamp" in df.columns:
+                df = df.with_columns(
+                    pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+                )
+            normalized_data[symbol] = df
+        data = normalized_data
+
         # Align all symbols to a common date index
         common_dates = self._get_common_dates(data)
         if len(common_dates) < 2:
@@ -207,7 +217,13 @@ class BacktestEngine(IBacktestEngine):
         """Find dates common to all symbols, sorted ascending."""
         date_sets = []
         for df in data.values():
-            dates = set(df["timestamp"].to_list())
+            if "timestamp" not in df.columns or df.is_empty():
+                return []
+            raw_dates = df["timestamp"].to_list()
+            dates = {
+                d.replace(tzinfo=None) if hasattr(d, "tzinfo") and d.tzinfo is not None else d
+                for d in raw_dates
+            }
             date_sets.append(dates)
 
         if not date_sets:
@@ -230,6 +246,8 @@ class BacktestEngine(IBacktestEngine):
             symbol_lookup: dict[datetime, dict[str, float]] = {}
             for row in df.iter_rows(named=True):
                 ts = row["timestamp"]
+                if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+                    ts = ts.replace(tzinfo=None)
                 if ts in common_set:
                     symbol_lookup[ts] = {
                         "open": float(row["open"]),

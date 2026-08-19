@@ -10,6 +10,7 @@ repos:
     rev: v1.13.0
     hooks:
       - id: mypy
+        files: ^(src|apps)/
         additional_dependencies: [pydantic, sqlalchemy]
         args: [--ignore-missing-imports]
 

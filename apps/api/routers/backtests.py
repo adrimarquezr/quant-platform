@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -69,21 +70,90 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
     # 2. Load or fetch market data
     data: dict[str, pl.DataFrame] = {}
     for symbol in request.universe:
+        df: pl.DataFrame | None = None
         try:
-            if storage.exists(symbol):
-                df = storage.load_ohlcv(symbol)
-            else:
-                df = provider.fetch_ohlcv(
-                    symbol, request.start_date, request.end_date, request.frequency
-                )
-                storage.save_ohlcv(df, symbol, request.frequency)
+            # Check if cached data exists and covers the requested date range
+            if storage.exists(symbol, frequency=request.frequency):
+                cached_df = storage.load_ohlcv(symbol, frequency=request.frequency)
+                if "timestamp" in cached_df.columns:
+                    cached_df = cached_df.with_columns(
+                        pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+                    )
+
+                if not cached_df.is_empty():
+                    dates = cached_df["timestamp"].dt.date()
+                    min_d = dates.min()
+                    max_d = dates.max()
+                    # Use cached if it covers the requested range
+                    if (
+                        isinstance(min_d, date)
+                        and isinstance(max_d, date)
+                        and min_d <= request.start_date
+                        and max_d >= request.end_date
+                    ):
+                        df = cached_df
+
+            # Fetch fresh data if not in cache or cached range is insufficient
+            if df is None:
+                try:
+                    fresh_df = provider.fetch_ohlcv(
+                        symbol, request.start_date, request.end_date, request.frequency
+                    )
+                    if "timestamp" in fresh_df.columns:
+                        fresh_df = fresh_df.with_columns(
+                            pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+                        )
+
+                    if storage.exists(symbol, frequency=request.frequency):
+                        try:
+                            existing = storage.load_ohlcv(symbol, frequency=request.frequency)
+                            if "timestamp" in existing.columns:
+                                existing = existing.with_columns(
+                                    pl.col("timestamp")
+                                    .dt.replace_time_zone(None)
+                                    .cast(pl.Datetime("us"))
+                                )
+                            df = (
+                                pl.concat([existing, fresh_df])
+                                .unique(subset=["timestamp"])
+                                .sort("timestamp")
+                            )
+                        except Exception:
+                            df = fresh_df
+                    else:
+                        df = fresh_df
+
+                    storage.save_ohlcv(df, symbol, request.frequency)
+                except Exception as fetch_err:
+                    logger.warning(
+                        "Could not fetch fresh data for %s from provider: %s", symbol, fetch_err
+                    )
+                    # Fallback to cached data if available
+                    if storage.exists(symbol, frequency=request.frequency):
+                        df = storage.load_ohlcv(symbol, frequency=request.frequency)
+                        if "timestamp" in df.columns:
+                            df = df.with_columns(
+                                pl.col("timestamp")
+                                .dt.replace_time_zone(None)
+                                .cast(pl.Datetime("us"))
+                            )
+                    else:
+                        raise
+
         except Exception as e:
             logger.exception("Failed to load data for %s", symbol)
             raise HTTPException(
-                status_code=500, detail=f"Failed to load data for {symbol}: {e}"
+                status_code=400,
+                detail=f"Failed to load market data for '{symbol}' ({request.start_date} to {request.end_date}): {e}",
             ) from e
 
-        # 3. Compute features
+        if df is None or df.is_empty():
+            raise HTTPException(
+                status_code=400,
+                detail=f"No market data available for '{symbol}' in range {request.start_date} to {request.end_date}.",
+            )
+
+        # 3. Compute features on full history
         df = compute_all_features(df)
 
         # Filter date range
@@ -92,7 +162,22 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
         df = df.filter(
             (df["timestamp"].dt.date() >= start_dt) & (df["timestamp"].dt.date() <= end_dt)
         )
+
+        if len(df) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data bars for '{symbol}' in date range {request.start_date} to {request.end_date} (found {len(df)} bars, minimum required: 2).",
+            )
+
         data[symbol] = df
+
+    # Check common dates overlap across the entire universe
+    common_dates = engine._get_common_dates(data)
+    if len(common_dates) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient overlapping dates across universe {request.universe} between {request.start_date} and {request.end_date} (found {len(common_dates)} common dates).",
+        )
 
     # 4. Build config and run backtest
     config = BacktestConfig(
