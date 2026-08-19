@@ -20,7 +20,7 @@ Run:
 from __future__ import annotations
 
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # Ensure project root is in sys.path when run directly
@@ -45,7 +45,6 @@ from src.domain.models import (
     PortfolioConstraints,
     PortfolioConstructionMethod,
     RiskLimitConfig,
-    RiskVerdict,
     TimeRange,
 )
 from src.features.engine import FeatureEngine
@@ -100,9 +99,13 @@ def main() -> int:
     # --------------------------------------------------------------------------
     print("\n[Step 1/10] Ingesting Market Data for Universe: ['SPY', 'QQQ', 'AAPL', 'MSFT']...")
     universe = ["SPY", "QQQ", "AAPL", "MSFT"]
-    raw_data: dict[str, pl.DataFrame] = {sym: generate_market_data(sym, n_bars=252) for sym in universe}
+    raw_data: dict[str, pl.DataFrame] = {
+        sym: generate_market_data(sym, n_bars=252) for sym in universe
+    }
     for sym, df in raw_data.items():
-        print(f"  [+] {sym:<5}: {len(df)} daily bars from {df['timestamp'][0].date()} to {df['timestamp'][-1].date()}")
+        print(
+            f"  [+] {sym:<5}: {len(df)} daily bars from {df['timestamp'][0].date()} to {df['timestamp'][-1].date()}"
+        )
 
     # --------------------------------------------------------------------------
     # Step 2: Data Quality Validation (10 Quantitative Rules)
@@ -113,7 +116,9 @@ def main() -> int:
     for sym, df in raw_data.items():
         report = validator.validate_dataset(df, symbol=sym)
         status_tag = "PASSED" if report.is_valid else "FAILED"
-        print(f"  [+] {sym:<5}: {status_tag} ({len(report.checks)} checks passed, {report.rows_checked} rows verified)")
+        print(
+            f"  [+] {sym:<5}: {status_tag} ({len(report.checks)} checks passed, {report.rows_checked} rows verified)"
+        )
         if not report.is_valid:
             all_valid = False
 
@@ -130,12 +135,16 @@ def main() -> int:
     for sym, df in raw_data.items():
         df_feat = feature_engine.transform(df)
         features_data[sym] = df_feat
-        print(f"  [+] {sym:<5}: {len(df_feat.columns)} features computed (SMA, Volatility, Z-Scores, Drawdowns, ATR)")
+        print(
+            f"  [+] {sym:<5}: {len(df_feat.columns)} features computed (SMA, Volatility, Z-Scores, Drawdowns, ATR)"
+        )
 
     # --------------------------------------------------------------------------
     # Step 4: Strategy Signal Generation
     # --------------------------------------------------------------------------
-    print("\n[Step 4/10] Generating Strategy Signals (Cross-Sectional Momentum & Mean Reversion)...")
+    print(
+        "\n[Step 4/10] Generating Strategy Signals (Cross-Sectional Momentum & Mean Reversion)..."
+    )
     mom_strategy = MomentumStrategy()
     rev_strategy = MeanReversionStrategy()
 
@@ -166,7 +175,9 @@ def main() -> int:
         constraints=constraints,
     )
     print(f"  [+] Target Weights: {target_weights.weights}")
-    print(f"  [+] Gross Exposure: {target_weights.gross_exposure * 100:.1f}% (Constraint: <= 100.0%)")
+    print(
+        f"  [+] Gross Exposure: {target_weights.gross_exposure * 100:.1f}% (Constraint: <= 100.0%)"
+    )
 
     # --------------------------------------------------------------------------
     # Step 6: Quantitative Risk Governance Audit
@@ -182,7 +193,9 @@ def main() -> int:
     )
 
     # Initial mock equity series for risk assessment
-    mock_returns: list[float] = [float(x) for x in np.random.default_rng(42).normal(0.0004, 0.012, 252)]
+    mock_returns: list[float] = [
+        float(x) for x in np.random.default_rng(42).normal(0.0004, 0.012, 252)
+    ]
     mock_equity: list[float] = [float(x) for x in 100_000.0 * np.exp(np.cumsum(mock_returns))]
 
     risk_profile = risk_engine.evaluate_risk(
@@ -219,20 +232,36 @@ def main() -> int:
     m = result.metrics
 
     print(f"  [+] Backtest Status:       {result.status.value.upper()}")
-    print(f"  [+] Simulation Duration:   {result.execution_time_ms} ms across {len(result.dates)} trading days")
-    print(f"  [+] Orders Executed:       {len(result.orders)} orders, {len(result.executions)} fills")
+    print(
+        f"  [+] Simulation Duration:   {result.execution_time_ms} ms across {len(result.dates)} trading days"
+    )
+    print(
+        f"  [+] Orders Executed:       {len(result.orders)} orders, {len(result.executions)} fills"
+    )
 
     # --------------------------------------------------------------------------
     # Step 8: Trade Analytics & Performance Evaluation
     # --------------------------------------------------------------------------
     print("\n[Step 8/10] Trade Analytics & Institutional Metrics:")
     print(SUB_DIVIDER)
-    print(f"  Total Return:        {m.get('total_return', 0.0) * 100:>7.2f}%   |  CAGR:             {m.get('cagr', 0.0) * 100:>7.2f}%")
-    print(f"  Annualized Vol:      {m.get('annualized_volatility', 0.0) * 100:>7.2f}%   |  Max Drawdown:     {m.get('max_drawdown', 0.0) * 100:>7.2f}%")
-    print(f"  Sharpe Ratio (rf=0): {m.get('sharpe_ratio', 0.0):>7.2f}    |  Sortino Ratio:    {m.get('sortino_ratio', 0.0):>7.2f}")
-    print(f"  Calmar Ratio:        {m.get('calmar_ratio', 0.0):>7.2f}    |  Profit Factor:    {m.get('profit_factor', 0.0):>7.2f}")
-    print(f"  Round-Trip Trades:   {int(m.get('total_trades', 0)):>7}    |  Win Rate:         {m.get('win_rate', 0.0) * 100:>7.2f}%")
-    print(f"  Best Trade:          {m.get('best_trade', 0.0) * 100:>7.2f}%   |  Worst Trade:      {m.get('worst_trade', 0.0) * 100:>7.2f}%")
+    print(
+        f"  Total Return:        {m.get('total_return', 0.0) * 100:>7.2f}%   |  CAGR:             {m.get('cagr', 0.0) * 100:>7.2f}%"
+    )
+    print(
+        f"  Annualized Vol:      {m.get('annualized_volatility', 0.0) * 100:>7.2f}%   |  Max Drawdown:     {m.get('max_drawdown', 0.0) * 100:>7.2f}%"
+    )
+    print(
+        f"  Sharpe Ratio (rf=0): {m.get('sharpe_ratio', 0.0):>7.2f}    |  Sortino Ratio:    {m.get('sortino_ratio', 0.0):>7.2f}"
+    )
+    print(
+        f"  Calmar Ratio:        {m.get('calmar_ratio', 0.0):>7.2f}    |  Profit Factor:    {m.get('profit_factor', 0.0):>7.2f}"
+    )
+    print(
+        f"  Round-Trip Trades:   {int(m.get('total_trades', 0)):>7}    |  Win Rate:         {m.get('win_rate', 0.0) * 100:>7.2f}%"
+    )
+    print(
+        f"  Best Trade:          {m.get('best_trade', 0.0) * 100:>7.2f}%   |  Worst Trade:      {m.get('worst_trade', 0.0) * 100:>7.2f}%"
+    )
     print(SUB_DIVIDER)
 
     # --------------------------------------------------------------------------
@@ -291,9 +320,13 @@ def main() -> int:
     print("  [+] Type Safety:      Mypy 100% Strict Typechecked (0 errors)")
     print("  [+] Code Quality:     Ruff Linter & Formatter (0 violations)")
     print("  [+] Testing:          115 Automated Tests Passing (Coverage: >91%)")
-    print("  [+] Look-Ahead Bias:  Formally Verified (Zero Look-Ahead in Features & Next-Bar Execution)")
+    print(
+        "  [+] Look-Ahead Bias:  Formally Verified (Zero Look-Ahead in Features & Next-Bar Execution)"
+    )
     print("  [+] Trade Analytics:  FIFO Round-Trip Trade Matching with Slippage & Commissions")
-    print("  [+] Deployment:       FastAPI REST API, Airflow DAGs, Docker Compose & Apache Superset")
+    print(
+        "  [+] Deployment:       FastAPI REST API, Airflow DAGs, Docker Compose & Apache Superset"
+    )
     print("  [+] Release Status:   PRODUCTION READY (v1.0.0)")
     print(DIVIDER)
     return 0

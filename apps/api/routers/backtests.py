@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -84,7 +85,12 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
                     min_d = dates.min()
                     max_d = dates.max()
                     # Use cached if it covers the requested range
-                    if min_d is not None and max_d is not None and min_d <= request.start_date and max_d >= request.end_date:
+                    if (
+                        isinstance(min_d, date)
+                        and isinstance(max_d, date)
+                        and min_d <= request.start_date
+                        and max_d >= request.end_date
+                    ):
                         df = cached_df
 
             # Fetch fresh data if not in cache or cached range is insufficient
@@ -103,7 +109,9 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
                             existing = storage.load_ohlcv(symbol, frequency=request.frequency)
                             if "timestamp" in existing.columns:
                                 existing = existing.with_columns(
-                                    pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+                                    pl.col("timestamp")
+                                    .dt.replace_time_zone(None)
+                                    .cast(pl.Datetime("us"))
                                 )
                             df = (
                                 pl.concat([existing, fresh_df])
@@ -117,13 +125,17 @@ async def run_backtest(request: BacktestRequest) -> BacktestResponse:
 
                     storage.save_ohlcv(df, symbol, request.frequency)
                 except Exception as fetch_err:
-                    logger.warning("Could not fetch fresh data for %s from provider: %s", symbol, fetch_err)
+                    logger.warning(
+                        "Could not fetch fresh data for %s from provider: %s", symbol, fetch_err
+                    )
                     # Fallback to cached data if available
                     if storage.exists(symbol, frequency=request.frequency):
                         df = storage.load_ohlcv(symbol, frequency=request.frequency)
                         if "timestamp" in df.columns:
                             df = df.with_columns(
-                                pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
+                                pl.col("timestamp")
+                                .dt.replace_time_zone(None)
+                                .cast(pl.Datetime("us"))
                             )
                     else:
                         raise

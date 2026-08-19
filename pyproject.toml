@@ -92,6 +92,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG001", "ARG002", "PT018", "N806", "B905"]
 "dags/*" = ["ARG001", "ARG002"]
+"examples/*" = ["E402", "N806", "ARG001", "ARG002"]
 "src/strategies/*" = ["ARG002"]
 "src/execution/*" = ["ARG002"]
 

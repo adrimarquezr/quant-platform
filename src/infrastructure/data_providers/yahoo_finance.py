@@ -87,9 +87,7 @@ class YahooFinanceProvider(IMarketDataProvider):
         df = df.select(available)
 
         # Ensure timestamp is datetime type and timezone-naive
-        df = df.with_columns(
-            pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us"))
-        )
+        df = df.with_columns(pl.col("timestamp").dt.replace_time_zone(None).cast(pl.Datetime("us")))
 
         # Sort by timestamp ascending
         df = df.sort("timestamp")
