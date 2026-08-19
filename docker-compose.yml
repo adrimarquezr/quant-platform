@@ -89,10 +89,44 @@ services:
       - quant-network
 
   # --------------------------------------------------------------------------
+  # Airflow Init — Database Migration & Admin User Initialization
+  # --------------------------------------------------------------------------
+  airflow-init:
+    build:
+      context: .
+      dockerfile: infra/docker/airflow.Dockerfile
+    image: quant-airflow:2.10.2
+    container_name: quant-airflow-init
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-quant_airflow_secret_key_change_me}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      PYTHONPATH: /opt/airflow
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: version
+    networks:
+      - quant-network
+
+  # --------------------------------------------------------------------------
   # Airflow Webserver — UI & API Orchestration
   # --------------------------------------------------------------------------
   airflow-webserver:
-    image: apache/airflow:2.10.2-python3.12
+    build:
+      context: .
+      dockerfile: infra/docker/airflow.Dockerfile
+    image: quant-airflow:2.10.2
     container_name: quant-airflow-webserver
     restart: unless-stopped
     environment:
@@ -116,6 +150,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     command: webserver
     networks:
       - quant-network
@@ -124,7 +160,10 @@ services:
   # Airflow Scheduler — Dag Parsing & Job Dispatch
   # --------------------------------------------------------------------------
   airflow-scheduler:
-    image: apache/airflow:2.10.2-python3.12
+    build:
+      context: .
+      dockerfile: infra/docker/airflow.Dockerfile
+    image: quant-airflow:2.10.2
     container_name: quant-airflow-scheduler
     restart: unless-stopped
     environment:
@@ -133,6 +172,7 @@ services:
       AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-quant_airflow_secret_key_change_me}
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       PYTHONPATH: /opt/airflow
     volumes:
@@ -145,6 +185,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     command: scheduler
     networks:
       - quant-network
@@ -153,7 +195,10 @@ services:
   # Airflow Worker — Celery Task Runner
   # --------------------------------------------------------------------------
   airflow-worker:
-    image: apache/airflow:2.10.2-python3.12
+    build:
+      context: .
+      dockerfile: infra/docker/airflow.Dockerfile
+    image: quant-airflow:2.10.2
     container_name: quant-airflow-worker
     restart: unless-stopped
     environment:
@@ -162,6 +207,7 @@ services:
       AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
       AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFfDewQ9e65CV2aqY=}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-quant_airflow_secret_key_change_me}
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       PYTHONPATH: /opt/airflow
     volumes:
@@ -174,6 +220,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     command: celery worker
     networks:
       - quant-network
@@ -182,7 +230,9 @@ services:
   # Apache Superset — Quant BI Dashboards
   # --------------------------------------------------------------------------
   superset:
-    image: apache/superset:latest
+    build:
+      context: .
+      dockerfile: infra/docker/superset.Dockerfile
     container_name: quant-superset
     restart: unless-stopped
     environment:
@@ -192,6 +242,7 @@ services:
       SUPERSET_ADMIN_EMAIL: admin@quant-platform.local
       SUPERSET_ADMIN_FIRST_NAME: Admin
       SUPERSET_ADMIN_LAST_NAME: User
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
       DATABASE_URL: postgresql://${POSTGRES_USER:-quant_user}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-quant_platform}
     ports:
       - "${SUPERSET_PORT:-8088}:8088"
@@ -200,6 +251,15 @@ services:
         condition: service_healthy
     volumes:
       - superset_home:/app/superset_home
+      - ./infra/superset/superset_config.py:/app/pythonpath/superset_config.py
+      - ./infra/superset/docker-entrypoint.sh:/app/docker-entrypoint.sh
+    entrypoint: ["/bin/bash", "/app/docker-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - quant-network
 
