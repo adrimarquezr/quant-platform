@@ -10,6 +10,7 @@ import logging
 from datetime import date
 from pathlib import Path
 
+import polars as pl
 from fastapi import APIRouter, HTTPException
 
 from apps.api.schemas import DataQualityReport, MarketDataRequest, MarketDataSummary, PriceBar
